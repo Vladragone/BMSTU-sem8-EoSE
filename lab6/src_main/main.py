@@ -82,6 +82,8 @@ class COCOMOApp:
              ["Низкий", "Низкий", "Номинальный", "Высокий", "Очень высокий"]),
             ('CPLX', 'Сложность продукта', [0.7, 0.85, 1.0, 1.15, 1.3],
              ["Очень низкий", "Низкий", "Номинальный", "Высокий", "Очень высокий"]),
+            ('TIME', 'Ограничения по времени', [1.0, 1.11],
+             ["Номинальный", "Высокий"]),
             ('ACAP', 'Способности аналитика', [1.46, 1.19, 1.0, 0.86, 0.71],
              ["Очень низкий", "Низкий", "Номинальный", "Высокий", "Очень высокий"]),
             ('PCAP', 'Способности программиста', [1.42, 1.17, 1.0, 0.86, 0.7],
@@ -130,6 +132,7 @@ class COCOMOApp:
             'RELY': "Номинальный (1.0)",
             'DATA': "Высокий (1.08)",
             'CPLX': "Номинальный (1.0)",
+            'TIME': "Номинальный (1.0)",
             'ACAP': "Высокий (0.86)",
             'PCAP': "Номинальный (1.0)",
             'MODP': "Номинальный (1.0)",
@@ -202,22 +205,23 @@ class COCOMOApp:
         for widget in self.graph_frame.winfo_children():
             widget.destroy()
 
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+        fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+        ax1, ax2, ax3, ax4 = axes.flatten()
 
         drivers_to_analyze = ['ACAP', 'PCAP', 'MODP', 'TOOL']
         level_names = ['Оч. низк', 'Низк', 'Ном', 'Высок', 'Оч. выс']
 
-        # Предопределенные значения для каждого драйвера
         driver_values = {
             'ACAP': [1.46, 1.19, 1.0, 0.86, 0.71],
             'PCAP': [1.42, 1.17, 1.0, 0.86, 0.7],
             'MODP': [1.24, 1.1, 1.0, 0.91, 0.82],
-            'TOOL': [1.24, 1.1, 1.0, 0.91, 0.82]
+            'TOOL': [1.24, 1.1, 1.0, 0.91, 0.82],
+            'TIME': [1.0, 1.11],
+            'RELY': [1.0, 1.15]
         }
 
         params = self.model_params[model_type]
 
-        # График для PM
         for driver in drivers_to_analyze:
             pm_values = []
 
@@ -236,7 +240,6 @@ class COCOMOApp:
         ax1.legend()
         ax1.grid(True)
 
-        # График для TM
         for driver in drivers_to_analyze:
             tm_values = []
 
@@ -255,6 +258,49 @@ class COCOMOApp:
         ax2.set_ylabel('Месяцы')
         ax2.legend()
         ax2.grid(True)
+
+        scenario_level_names = {
+            'TIME': ['Номинальный', 'Высокий'],
+            'RELY': ['Номинальный', 'Высокий']
+        }
+
+        def get_fixed_high_scenario_values(varied_driver):
+            pm_values = []
+            tm_values = []
+
+            for val in driver_values[varied_driver]:
+                temp_drivers = base_drivers.copy()
+                temp_drivers['MODP'] = 0.82
+                temp_drivers['TOOL'] = 0.82
+                temp_drivers[varied_driver] = val
+                eaf = self.calculate_eaf(temp_drivers)
+                pm = params['a'] * eaf * (size ** params['b'])
+                tm = params['c'] * (pm ** params['d'])
+                pm_values.append(pm)
+                tm_values.append(tm)
+
+            return pm_values, tm_values
+
+        rely_pm_values, rely_tm_values = get_fixed_high_scenario_values('RELY')
+        time_pm_values, time_tm_values = get_fixed_high_scenario_values('TIME')
+
+        ax3.plot(scenario_level_names['RELY'], rely_pm_values, marker='o', label='RELY')
+        ax3.plot(scenario_level_names['TIME'], time_pm_values, marker='s', label='TIME')
+        ax3.set_title('MODP и TOOL = высокие\nВлияние RELY и TIME на трудоемкость (PM)')
+        ax3.set_xlabel('Уровень драйвера')
+        ax3.set_ylabel('Человеко-месяцы')
+        ax3.legend()
+        ax3.grid(True)
+
+        ax4.plot(scenario_level_names['RELY'], rely_tm_values, marker='o', label='RELY')
+        ax4.plot(scenario_level_names['TIME'], time_tm_values, marker='s', label='TIME')
+        ax4.set_title('MODP и TOOL = высокие\nВлияние RELY и TIME на время разработки (TM)')
+        ax4.set_xlabel('Уровень драйвера')
+        ax4.set_ylabel('Месяцы')
+        ax4.legend()
+        ax4.grid(True)
+
+        plt.tight_layout()
 
         canvas = FigureCanvasTkAgg(fig, master=self.graph_frame)
         canvas.draw()
